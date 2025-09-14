@@ -26,6 +26,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# --- CUSTOM CSS TO INCREASE SIDEBAR WIDTH ---
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {
+        width: 350px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # --- Matplotlib Style ---
 plt.style.use('seaborn-v0_8-darkgrid')
 
@@ -129,7 +142,7 @@ def categorize_behavior(row):
         return "Mixed behavior"
 
 def display_dashboard(charts_placeholder, trend_chart_placeholder, insights_placeholder,
-                      plot_type, selected_years, selected_months, selected_days):
+                      plot_type, selected_objects, selected_years, selected_months, selected_days):
     """Renders all data visualizations based on the selected filters."""
     df = parse_log_file() # Always get the latest data
 
@@ -147,6 +160,8 @@ def display_dashboard(charts_placeholder, trend_chart_placeholder, insights_plac
 
     # Create filter mask
     mask = pd.Series(True, index=df.index)
+    if selected_objects:
+        mask &= df['Activity'].isin(selected_objects)
     if selected_years:
         mask &= df['year'].isin(selected_years)
     if selected_months:
@@ -165,7 +180,7 @@ def display_dashboard(charts_placeholder, trend_chart_placeholder, insights_plac
     with charts_placeholder.container():
         st.subheader("Total Interaction Time")
         activity_summary = df_filtered.groupby("Activity")["time"].sum().reset_index()
-        
+
         if not activity_summary.empty:
             activity_summary["minutes"] = activity_summary["time"] / 60
             fig1, ax1 = plt.subplots()
@@ -176,7 +191,7 @@ def display_dashboard(charts_placeholder, trend_chart_placeholder, insights_plac
             st.info("No activity for this chart.")
 
         st.markdown("---")
-        
+
         col_pie, col_heatmap = st.columns(2, gap="large")
         with col_pie:
             st.subheader("Activity Proportions")
@@ -202,7 +217,7 @@ def display_dashboard(charts_placeholder, trend_chart_placeholder, insights_plac
             df_filtered['month_period'] = df_filtered['timestamp'].dt.to_period('M').astype(str)
             monthly_summary = df_filtered.groupby(['month_period', 'Activity'])['time'].sum().reset_index()
             monthly_summary['hours'] = monthly_summary['time'] / 3600
-            
+
             if not monthly_summary.empty and len(monthly_summary['month_period'].unique()) > 1:
                 fig_trend, ax_trend = plt.subplots(figsize=(12, 6))
 
@@ -225,7 +240,7 @@ def display_dashboard(charts_placeholder, trend_chart_placeholder, insights_plac
                 st.info("Not enough data to plot monthly trends (requires data from more than one month).")
         else:
             st.info("Not enough data to plot monthly trends.")
-    
+
     # --- Render Insights Table in its own placeholder ---
     with insights_placeholder.container():
         insights = df_filtered.groupby("Activity")["time"].agg(
@@ -249,29 +264,46 @@ def display_dashboard(charts_placeholder, trend_chart_placeholder, insights_plac
 
 # --- ======================== Main App ======================== ---
 
-st.title("👋 Real-time Hand-Object Interaction Tracker")
+st.title("👋 Interakt: Real-time Hand-Object Interaction Tracker")
 st.markdown("This app uses your webcam for real-time analysis of your hand-object interactions. The dashboard updates automatically!")
 st.markdown("---")
 
 # --- Sidebar Controls & Filters ---
 with st.sidebar:
-    st.header("⚙️ Controls")
+
     run_camera = st.toggle("Start Camera Feed", value=False)
     TARGET_OBJECTS = st.multiselect(
         "Objects to track:",
         ['cell phone', 'laptop', 'book', 'cup', 'bottle', 'mouse', 'keyboard', 'remote', 'tv'],
         default=['cell phone', 'laptop', 'book', 'cup']
     )
+    
+    st.markdown("---")
 
-    # First, parse the data to see if there's anything to filter
+    # --- UPDATED FILTER LOGIC ---
     df_for_filters = parse_log_file()
+    # Initialize all filter variables to prevent errors
+    selected_objects, selected_years, selected_months, selected_days = [], [], [], []
 
-    # Initialize filter variables to prevent errors if they aren't created
-    selected_years, selected_months, selected_days = [], [], []
+    # Use columns to place the button next to the expander title
+    col_expander, col_button = st.columns([6, 1])
 
-    # Only show the filter UI if there is data in the log file
+    with col_expander:
+        # The expander is now always visible
+        expander = st.expander("📊 Dashboard Filters")
+        
+
+    with col_button:
+        st.button("🔄") # Refresh button - clicking it re-runs the script
+
+    # The content inside the expander is conditional on data existing
     if not df_for_filters.empty:
-        with st.expander("📊 Dashboard Filters", expanded=True):
+        with expander:
+            # Add the new object filter
+            all_objects = sorted(df_for_filters['Activity'].unique())
+            selected_objects = st.multiselect("Filter by Object:", options=all_objects, default=[])
+
+            # Date-based filters
             df_for_filters['year'] = df_for_filters['timestamp'].dt.year
             df_for_filters['month_name'] = df_for_filters['timestamp'].dt.strftime('%B')
             df_for_filters['day'] = df_for_filters['timestamp'].dt.day
@@ -295,6 +327,10 @@ with st.sidebar:
 
             all_days = sorted(filtered_by_month_df['day'].unique())
             selected_days = st.multiselect("Filter by Day:", options=all_days, default=[])
+    else:
+        with expander:
+            # Show a warning inside the expander if there is no data
+            st.warning("No activity data to filter.")
 
 # --- Load Models & Setup Log ---
 detector, yolo_model = load_models()
@@ -305,8 +341,7 @@ top_container = st.container()
 with top_container:
     col_feed, col_dash = st.columns([2, 1.5], gap="large")
     with col_feed:
-        st.markdown("📍 **Location:** El Sobrante, California, United States")
-        st.markdown(f"🕒 **Current Time:** {datetime.now().strftime('%A, %B %d, %Y at %I:%M %p %Z')}")
+        st.info("⬅️ Turn on the 'Start Camera Feed' toggle in the sidebar to begin.")
         st.header("🎥 Live Feed")
         FRAME_WINDOW = st.image([])
     with col_dash:
@@ -334,7 +369,7 @@ insights_placeholder = st.empty()
 def update_dashboard():
     """Wrapper to pass all required arguments to the display function."""
     display_dashboard(charts_placeholder, trend_chart_placeholder, insights_placeholder,
-                      plot_type, selected_years, selected_months, selected_days)
+                      plot_type, selected_objects, selected_years, selected_months, selected_days)
 
 update_dashboard() # Initial display
 
@@ -354,7 +389,6 @@ if run_camera:
             if not success:
                 st.error("Failed to capture image from camera."); break
             
-            # BUG FIX: Changed cv.flip to cv2.flip
             frame = cv2.flip(frame, 1)
             
             # --- Detection Logic ---
@@ -389,7 +423,6 @@ if run_camera:
             
             elif not object_held_this_frame and st.session_state.is_using_object:
                 log_activity(st.session_state.current_object_label, time.time() - st.session_state.usage_start_time)
-                # Clear cache to force re-read of the log file on the next run
                 st.cache_data.clear()
                 update_dashboard()
                 st.session_state.update(is_using_object=False, usage_start_time=None, current_object_label=None)
@@ -402,7 +435,6 @@ if run_camera:
         
         cap.release()
         st.info("Camera stopped. Performing final dashboard update.")
-        # Clear cache to ensure final update uses the very latest data
         st.cache_data.clear()
         update_dashboard()
 else:
