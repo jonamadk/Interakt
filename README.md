@@ -1,11 +1,11 @@
 # Interakt
-Interakt is a real-time hand–object interaction tracker powered by YOLO , MediaPipe and Streamlit. It uses your webcam to detect hands and everyday objects, logs interaction durations automatically, and visualizes behavior patterns through an intuitive dashboard. 
+Interakt is a real-time hand–object interaction tracker powered by `YOLO` , `MediaPipe` and `Streamlit`. It uses your webcam to detect hands and everyday objects, logs interaction durations automatically, and visualizes behavior patterns through an intuitive dashboard. 
 
 # 👋 Interakt: Real-time Hand-Object Interaction Tracker
 
 **Interakt** is a real-time hand–object interaction tracker powered by **YOLO**, **MediaPipe** and **Streamlit**. It uses your webcam to detect hands and everyday  (Cell Phone, books, bottle, cup, laptop), and visualizes userbehavior patterns through an intuitive dashboard.
 
-
+![Dashboard Preview](assets/dashboard1.png)
 
 ---
 
